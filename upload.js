@@ -11,7 +11,7 @@ if (ACCESS_KEY && SECRET_KEY) {
     AWS.config.credentials = new AWS.Credentials(process.env.ACCESS_KEY, process.env.SECRET_KEY)
 }
 
-var devicefarm = new AWS.DeviceFarm({ region: REGION })
+let devicefarm = new AWS.DeviceFarm({ region: REGION })
 
 /* TODO */
 const source = process.argv[2]
@@ -37,32 +37,42 @@ function printHelp() {
 }
 /* END TODO */
 
-function get_project_arn(name) {
+async function upload(upload_type, upload_path, upload_name) {
+    console.log(`Uploading [${upload_path}] to [${upload_name}]...`)
+    const project_arn = await get_project_arn_by_name(PROJECT_NAME)
+    let upload_arn = await get_project_upload_arn_by_name(project_arn, upload_name)
+    if (upload_arn) {
+        await delete_upload(upload_arn)
+    }
+    console.log("Creating upload...")
+    let url = await create_upload(project_arn, upload_type, upload_name)
+    console.log("Uploading to presigned url...")
+    upload_arn = await upload_presigned_url(url, upload_path)
+    console.log(`Polling...`)
+    await _poll_until_upload_done(upload_arn)
+}
+
+function get_project_arn_by_name(name) {
     return new Promise((resolve, reject) => {
         devicefarm.listProjects(function (err, data) {
-            if (err) {
-                reject(err)
-            } else {
-                var projectArn = data.projects.filter(function (project) {
-                    return project.name === name
-                })[0].arn
-                resolve(projectArn)
+            if (err) reject(err)
+            else {
+                let projects = data.projects.filter((project) => project.name == name)
+                if (projects.length == 0) reject(`${name} not found`)
+                resolve(projects[0].arn)
             }
         })
     })
 }
 
-function get_upload_arn(project_arn, name) {
+function get_project_upload_arn_by_name(project_arn, name) {
     return new Promise((resolve, reject) => {
-        devicefarm.listUploads({ arn: project_arn }, function (err, data) {
-            if (err) {
-                reject(err)
-            } else {
-                var uploadArn = data.uploads.filter(function (upload) {
-                    return upload.name === name
-                })[0]?.arn
-                console.log(uploadArn)
-                resolve(uploadArn)
+        let param = { arn: project_arn }
+        devicefarm.listUploads(param, function (err, data) {
+            if (err) reject(err)
+            else {
+                let uploads = data.uploads.filter((upload) => upload.name === name)
+                resolve(uploads[0]?.arn)
             }
         })
     })
@@ -70,12 +80,10 @@ function get_upload_arn(project_arn, name) {
 
 function delete_upload(upload_arn) {
     return new Promise((resolve, reject) => {
-        devicefarm.deleteUpload({ arn: upload_arn }, function (err, data) {
-            if (err) {
-                reject(err)
-            } else {
-                resolve(data)
-            }
+        let param = { arn: upload_arn }
+        devicefarm.deleteUpload(param, function (err, data) {
+            if (err) reject(err)
+            else resolve(data)
         })
     })
 }
@@ -101,7 +109,7 @@ function create_upload(project_arn, upload_type, name) {
 }
 
 function upload_presigned_url(url, file_path) {
-    var file = fs.readFileSync(file_path)
+    let file = fs.readFileSync(file_path)
     return new Promise((resolve, reject) => {
         request.put(
             url.upload.url,
@@ -122,47 +130,36 @@ function upload_presigned_url(url, file_path) {
     })
 }
 
-function _poll_until_upload_done(upload_arn) {
+async function _poll_until_upload_done(uploadArn, timeOutSeconds = 60 * 5) {
+    const retryDelayInSeconds = 15
+    let counter = 0
+    while (counter < timeOutSeconds) {
+        const { status } = await get_upload(uploadArn)
+        console.log("Current status: " + status)
+        if (status === "SUCCEEDED") {
+            return
+        } else if (status === "FAILED") {
+            throw "Upload failed"
+        }
+        await Utils.sleep(retryDelayInSeconds * 1000)
+        counter += retryDelayInSeconds
+    }
+    throw `Upload timeout: ${timeOutSeconds} seconds`
+}
+
+function get_upload(upload_arn) {
     return new Promise((resolve, reject) => {
         devicefarm.getUpload({ arn: upload_arn }, function (err, data) {
             if (err) {
                 reject(err)
             } else {
-                if (
-                    data.upload.status === "PENDING" ||
-                    data.upload.status === "PROCESSING" ||
-                    data.upload.status === "INITIALIZED"
-                ) {
-                    console.log("Current status: " + data.upload.status)
-                    setTimeout(function () {
-                        _poll_until_upload_done(upload_arn)
-                    }, 5000)
-                } else {
-                    console.log(data)
-                    resolve(data)
-                }
+                resolve(data.upload)
             }
         })
     })
 }
 
-async function upload(upload_type, upload_path, upload_name) {
-    console.log(`Uploading [${upload_path}] to [${upload_name}]...`)
-    var project_arn = await get_project_arn(PROJECT_NAME)
-    var upload_arn = await get_upload_arn(project_arn, upload_name)
-    try {
-        if (upload_arn) {
-            await delete_upload(upload_arn)
-        }
-    } catch (e) {
-        console.log(e)
-    }
-    var type = upload_type
-    var name = upload_name
-    var url = await create_upload(project_arn, type, name)
-    console.log(url.upload.arn)
-    upload_arn = await upload_presigned_url(url, upload_path)
-    console.log(upload_arn)
-    await _poll_until_upload_done(upload_arn)
-    return upload_arn
+/* Utils */
+const Utils = {
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 }
