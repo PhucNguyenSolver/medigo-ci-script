@@ -1,0 +1,63 @@
+version: 0.2
+
+#env:
+  #variables:
+     # key: "value"
+     # key: "value"
+  #parameter-store:
+     # key: "value"
+     # key: "value"
+  #secrets-manager:
+     # key: secret-id:json-key:version-stage:version-id
+     # key: secret-id:json-key:version-stage:version-id
+  #exported-variables:
+     # - variable
+     # - variable
+  #git-credential-helper: yes
+phases:
+  install:
+    commands:
+      - npm i -g yarn
+  #pre_build:
+    #commands:
+      # - command
+      # - command
+  build:
+    commands:
+      - yarn
+      - cd ./android/
+      - echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      # - ./gradlew clean assembleDevDebug
+      - >
+        echo Create mocked artifacts && 
+        APK_BASE_DIR=app/build/outputs/apk/dev/debug/ &&
+        mkdir -p ${APK_BASE_DIR} && 
+        echo "hello" > ${APK_BASE_DIR}mocked-app.apk && 
+        ls ${APK_BASE_DIR}
+  post_build:
+    commands:
+      - >
+        echo "Upload artifacts" && 
+        UPLOAD_NAME=user.apk && 
+        PATH_TO_APK=$(ls ./${APK_BASE_DIR}*.apk) &&
+        node ../script/upload.js $PATH_TO_APK $UPLOAD_NAME && 
+        echo "Uploaded" || echo "Upload failed"
+#reports:
+  #report-name-or-arn:
+    #files:
+      # - location
+      # - location
+    #base-directory: location
+    #discard-paths: yes
+    #file-format: JunitXml | CucumberJson
+#artifacts:
+  #files:
+    # - location
+    # - location
+  #name: $(date +%Y-%m-%d)
+  #discard-paths: yes
+  #base-directory: location
+#cache:
+  #paths:
+    # - paths
