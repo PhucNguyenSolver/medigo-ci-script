@@ -3,19 +3,40 @@ const request = require("request")
 const fs = require("fs")
 const REGION = "us-west-2"
 const PROJECT_NAME = "Automation Test"
-const APP_USER = "user.apk"
-const TEST_PACKAGE = "test-package.zip"
-const APP_PHARMACY = "pharmacy.apk"
-const DEVICE_POOL_NAME = "Android10"
-const DEFAULT_YAML = "Default TestSpec for Android Appium Java TestNG v3.0"
-const APP_PATH = ".//app//build//outputs//apk//debug//app-debug.apk"
-// const ACCESS_KEY = "None";
-// const SECRET_KEY = "None";
 
-AWS.config = new AWS.Config()
-AWS.config.credentials = new AWS.Credentials(process.env.ACCESS_KEY, process.env.SECRET_KEY)
+const ACCESS_KEY = process.env.ACCESS_KEY
+const SECRET_KEY = process.env.SECRET_KEY
+if (ACCESS_KEY && SECRET_KEY) {
+    AWS.config = new AWS.Config()
+    AWS.config.credentials = new AWS.Credentials(process.env.ACCESS_KEY, process.env.SECRET_KEY)
+}
 
 var devicefarm = new AWS.DeviceFarm({ region: REGION })
+
+/* TODO */
+const source = process.argv[2]
+const destination = process.argv[3]
+
+if (!source || !destination) {
+    console.log(`Invalid number of arguments`)
+    printHelp()
+    process.exit(1)
+}
+
+upload("ANDROID_APP", source, destination).catch((e) => {
+    console.log(e)
+    process.exit(1)
+})
+
+function printHelp() {
+    console.log(
+        `usage:\tupload.js [SOURCE] [DESTINATION]` +
+            `\n\tSOURCE: relative path to file on local machine` +
+            `\n\tDESTINATION: filename under DeviceFarm's Uploads menu`
+    )
+}
+/* END TODO */
+
 function get_project_arn(name) {
     return new Promise((resolve, reject) => {
         devicefarm.listProjects(function (err, data) {
@@ -37,14 +58,9 @@ function get_upload_arn(project_arn, name) {
             if (err) {
                 reject(err)
             } else {
-                console.log(
-                    data.uploads.filter(function (upload) {
-                        return upload.name === name
-                    })
-                )
                 var uploadArn = data.uploads.filter(function (upload) {
                     return upload.name === name
-                })[0].arn
+                })[0]?.arn
                 console.log(uploadArn)
                 resolve(uploadArn)
             }
@@ -130,7 +146,8 @@ function _poll_until_upload_done(upload_arn) {
     })
 }
 
-async function upload(upload_type, upload_name, upload_path) {
+async function upload(upload_type, upload_path, upload_name) {
+    console.log(`Uploading [${upload_path}] to [${upload_name}]...`)
     var project_arn = await get_project_arn(PROJECT_NAME)
     var upload_arn = await get_upload_arn(project_arn, upload_name)
     try {
@@ -149,5 +166,3 @@ async function upload(upload_type, upload_name, upload_path) {
     await _poll_until_upload_done(upload_arn)
     return upload_arn
 }
-
-var upload_arn = upload("ANDROID_APP", APP_USER, APP_PATH)
