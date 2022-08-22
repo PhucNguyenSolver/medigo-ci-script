@@ -7,13 +7,36 @@ const APP_PHARMACY = "pharmacy.apk"
 const DEVICE_POOL_NAME = "Android10"
 const DEFAULT_YAML = "Default TestSpec for Android Appium Java TestNG v3.0"
 
-// const ACCESS_KEY = "None";
-// const SECRET_KEY = "None";
-
-AWS.config = new AWS.Config()
-AWS.config.credentials = new AWS.Credentials(process.env.ACCESS_KEY, process.env.SECRET_KEY)
+const ACCESS_KEY = process.env.ACCESS_KEY
+const SECRET_KEY = process.env.SECRET_KEY
+if (ACCESS_KEY && SECRET_KEY) {
+    AWS.config = new AWS.Config()
+    AWS.config.credentials = new AWS.Credentials(process.env.ACCESS_KEY, process.env.SECRET_KEY)
+}
 
 var devicefarm = new AWS.DeviceFarm({ region: REGION })
+
+/* TODO */
+const runName = process.argv[2]
+
+if (!runName) {
+    console.log(`Invalid argument(s)`)
+    printHelp()
+    process.exit(1)
+}
+
+test(runName).catch((e) => {
+    console.log(e)
+    process.exit(1)
+})
+
+function printHelp() {
+    console.log(
+        `usage:\ttest.js [NAME]` + `\n\tNAME: A name to identify run (i.e contains app-version or package-version).`
+    )
+}
+/* END TODO */
+
 function get_project_arn(name) {
     return new Promise((resolve, reject) => {
         devicefarm.listProjects(function (err, data) {
@@ -136,7 +159,8 @@ function schedule_run(project_arn, name, device_pool_arn, app_arn, test_package_
     })
 }
 
-async function test() {
+async function test(runName) {
+    console.log(`Creating ${runName}`)
     var project_arn = await get_project_arn(PROJECT_NAME)
     var device_pool_arn = await get_device_pool_arn(project_arn, DEVICE_POOL_NAME)
     var app_arn = await get_upload_arn(project_arn, APP_USER)
@@ -146,7 +170,7 @@ async function test() {
 
     var run_arn = await schedule_run(
         project_arn,
-        (name = "Test Run"),
+        (name = runName),
         (device_pool_arn = device_pool_arn),
         (app_arn = app_arn),
         (test_package_arn = test_package_arn),
@@ -157,7 +181,4 @@ async function test() {
     await _poll_until_run_done(run_arn)
     var run_data = await get_run_result(run_arn)
     console.log(run_data)
-    console.log("1")
 }
-
-test()
