@@ -13,36 +13,23 @@ version: 0.2
   #exported-variables:
      # - variable
      # - variable
-  #git-credential-helper: yes
 phases:
-  install:
-    commands:
-      - npm i -g yarn
-  #pre_build:
-    #commands:
-      # - command
-      # - command
   build:
     commands:
-      - yarn
-      - cd ./android/
-      - echo "sdk.dir=$ANDROID_HOME" > local.properties
-
-      # - ./gradlew clean assembleDevDebug
+      - APK_BASE_DIR=app/build/outputs/apk/dev/debug
       - >
-        echo Create mocked artifacts && 
-        APK_BASE_DIR=app/build/outputs/apk/dev/debug/ &&
+        echo "Create mocked artifacts" && 
         mkdir -p ${APK_BASE_DIR} && 
-        echo "hello" > ${APK_BASE_DIR}mocked-app.apk && 
-        ls ${APK_BASE_DIR}
-  post_build:
-    commands:
-      - >
-        echo "Upload artifacts" && 
-        UPLOAD_NAME=user.apk && 
-        PATH_TO_APK=$(ls ./${APK_BASE_DIR}*.apk) &&
-        node ../script/upload.js $PATH_TO_APK $UPLOAD_NAME && 
-        echo "Uploaded" || echo "Upload failed"
+        echo "hello" > ${APK_BASE_DIR}/mocked-artifact.txt
+      - ls ${APK_BASE_DIR}
+#   post_build:
+#     commands:
+#       - >
+#         echo "Upload artifacts" && 
+#         UPLOAD_NAME=user.apk && 
+#         PATH_TO_APK=$(ls ./${APK_BASE_DIR}*.apk) &&
+#         node ../script/upload.js $PATH_TO_APK $UPLOAD_NAME && 
+#         echo "Uploaded" || echo "Upload failed"
 #reports:
   #report-name-or-arn:
     #files:
@@ -51,13 +38,10 @@ phases:
     #base-directory: location
     #discard-paths: yes
     #file-format: JunitXml | CucumberJson
-#artifacts:
-  #files:
-    # - location
-    # - location
-  #name: $(date +%Y-%m-%d)
-  #discard-paths: yes
-  #base-directory: location
+artifacts:
+  files:
+    - "${APK_BASE_DIR}/*"
+  name: $(date +%Y-%m-%d)
 #cache:
   #paths:
     # - paths 
