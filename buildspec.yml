@@ -31,8 +31,9 @@ phases:
     #discard-paths: yes
     #file-format: JunitXml | CucumberJson
 artifacts:
+  base-directory: "${APK_BASE_DIR}"
   files:
-    - "${APK_BASE_DIR}/*"
+    - '**.txt'
   name: $(date +%Y-%m-%d)
 #cache:
   #paths:
